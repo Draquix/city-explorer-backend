@@ -41,11 +41,11 @@ app.get('/location', (req,res) => {
 
 app.get('/weather', (req,res) => {
     const dataArrayFromJson = require('./data/weather.json');
-    const dataObjectFromJson = dataArrayFromJson.data[0];
-    
-    const newWeather = new Weather(dataObjectFromJson.weather.description,dataObjectFromJson.valid_date);
-
-    res.send(newWeather);
+    const weatherArray = [];
+    dataArrayFromJson.data.map( day => {
+        weatherArray.push(new Weather(day.weather.description,day.valid_date))
+    });
+    res.send(weatherArray);
 });
 
 app.use('*', (req,res) => {
