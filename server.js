@@ -51,7 +51,7 @@ app.get('/weather', (req,res) => {
 app.use('*', (req,res) => {
     res.status(500).send('Status: 500<br> Server has error processing query.');
 });
-
+//app now deployed on heroku
 
 // .catch(error => {
 //     res.status(500).send('location query failed');
