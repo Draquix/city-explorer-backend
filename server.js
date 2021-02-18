@@ -83,12 +83,12 @@ app.get('/parks', (req,res) => {
     const url = 'https://developer.nps.gov/api/v1/parks'
     const state = req.query.state;
     const searchParameters = {
-        key:apiKey, stateCode:state, limit:5
+        key:apiKey, stateCode:'ia', limit:5
     }
     const parksArray = [];
     superagent.get(url).query(searchParameters).then(returnData => {
         returnData.body.data.map( park => {
-            parksArray.push(new Park(park.name,park.address,park.fee,park.description,park.url));
+            parksArray.push(new Park(park.fullname,park.addresses.line1,park.entranceFees.cost,park.description,park.directionsUrl));
         })
         res.status(200).send(parksArray);
     }).catch(error => {
