@@ -42,15 +42,18 @@ function Park(name,address,fee,description,url) {
 }
 
 app.get('/location', (req,res) => {
-    // const dataArrayFromJson = require('./data/location.json');
-    // const dataObjectFromJson = dataArrayFromJson[0];
+    console.log('running location route');
+    
+     //const dataArrayFromJson = require('./data/location.json');
+     //const dataObjectFromJson = dataArrayFromJson[0];
 
-    const apiKey = process.env.GEOCODE_API_KEY;
-    const searchedCity = req.query.city;
-    const url = `https://us1.locationiq.com/v1/search.php?key=${apiKey}&q=${searchedCity}&format=json`;
+     const apiKey = process.env.GEOCODE_API_KEY;
+     const searchedCity = req.query.city;
+    
+     const url = `https://us1.locationiq.com/v1/search.php?key=${apiKey}&q=${searchedCity}&format=json`;
     const sqlQuery = 'SELECT * FROM location WHERE search_query=$1';
     const sqlArray = [searchedCity];
-
+   
     client.query(sqlQuery, sqlArray).then(result => {
         if(result.rows.length !== 0){
             res.send(result.rows[0]);
@@ -58,13 +61,13 @@ app.get('/location', (req,res) => {
 
 
         superagent.get(url).then(apiReturned => {
-            const newLocation = new Location(searchedCity,apiReturned.body.formatted_query,apiReturned.body.latitude,apiReturned.body.longitude);
+            const newLocation = new Location(searchedCity,'apiReturned.body.formatted_query',apiReturned.body.lat,apiReturned.body.lon);
             res.status(200).send(newLocation);
 
             const sqlQuery = 'INSERT INTO location (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4)';
             const sqlArray = [newLocation.searchedCity, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
             client.query(sqlQuery, sqlArray);
-        })
+       // })
         }).catch(error => {
             res.status(500).send('There was an error in the location query');
     })
@@ -100,9 +103,10 @@ app.get('/parks', (req,res) => {
     const url = 'https://developer.nps.gov/api/v1/parks'
     const state = req.query.state;
     const searchParameters = {
-        key:apiKey, stateCode:'ia', limit:5
+        api_key:apiKey, stateCode:'ia', limit:5
     }
     const parksArray = [];
+    //res.send(state);
     superagent.get(url).query(searchParameters).then(returnData => {
         returnData.body.data.map( park => {
             parksArray.push(new Park(park.fullname,park.addresses.line1,park.entranceFees.cost,park.description,park.directionsUrl));
