@@ -21,11 +21,11 @@ app.get('/', (req,res) => {
     res.send(`Connected on Port: ${PORT}`);
 });
 
-function Location(searchedCity, display_name, latitude, longitude) {
+function Location(searchedCity, locationObject) {
     this.searchedCity = searchedCity;
-    this.formatted_query = display_name;
-    this.latitude = parseFloat(latitude);
-    this.longitude = parseFloat(longitude);
+    this.formatted_query = locationObject.display_name;
+    this.latitude = locationObject.lat;
+    this.longitude = locationObject.lon;
 }
 
 function Weather(weather,valid_date) {
@@ -47,30 +47,31 @@ app.get('/location', (req,res) => {
      //const dataArrayFromJson = require('./data/location.json');
      //const dataObjectFromJson = dataArrayFromJson[0];
 
-     const apiKey = process.env.GEOCODE_API_KEY;
-     const searchedCity = req.query.city;
+    const apiKey = process.env.GEOCODE_API_KEY;
+    const searchedCity = req.query.city;
     
-     const url = `https://us1.locationiq.com/v1/search.php?key=${apiKey}&q=${searchedCity}&format=json`;
-    const sqlQuery = 'SELECT * FROM location WHERE search_query=$1';
+    const url = `https://us1.locationiq.com/v1/search.php?key=${apiKey}&q=${searchedCity}&format=json`;
+    const sqlQuery = 'SELECT * FROM locations WHERE search_query=$1';
     const sqlArray = [searchedCity];
    
     client.query(sqlQuery, sqlArray).then(result => {
         if(result.rows.length !== 0){
             res.send(result.rows[0]);
+        } else {
+
+
+            superagent.get(url).then(apiReturned => {
+                const newLocation = new Location(searchedCity,apiReturned);
+                res.status(200).send(newLocation);
+
+                const sqlQuery = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4)';
+                const sqlArray = [newLocation.searchedCity, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
+                client.query(sqlQuery, sqlArray);
+            })
         }
-
-
-        superagent.get(url).then(apiReturned => {
-            const newLocation = new Location(searchedCity,'apiReturned.body.formatted_query',apiReturned.body.lat,apiReturned.body.lon);
-            res.status(200).send(newLocation);
-
-            const sqlQuery = 'INSERT INTO location (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4)';
-            const sqlArray = [newLocation.searchedCity, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
-            client.query(sqlQuery, sqlArray);
-       // })
-        }).catch(error => {
-            res.status(500).send('There was an error in the location query');
-    })
+    }).catch(error => {
+        res.status(500).send('There was an error in the location query');
+    });
 });
 
 app.get('/weather', (req,res) => {
@@ -117,11 +118,6 @@ app.get('/parks', (req,res) => {
     })
 });
 
-app.use('*', (req,res) => {
-    res.status(500).send('Status: 500<br> Server has error processing query.');
-});
-//app now deployed on heroku
-
-// .catch(error => {
-//     res.status(500).send('location query failed');
-// });
+// app.use('*', (req,res) => {
+//     res.status(500).send('Status: 500<br> Server has error processing query.');
+// })
