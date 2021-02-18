@@ -7,8 +7,12 @@ const app = express();
 const cors = require('cors');
 const superagent = require('superagent');
 const { response } = require('express');
+const pg = require('pg');
 
 const PORT = process.env.PORT;
+const DATABASE_URL = process.env.DATABASE_URL;
+const client = new pg.Client(DATABASE_URL);
+
 
 app.use(cors());
 app.listen(PORT, () => console.log(`Server is listening on Port: ${PORT}`));
@@ -29,23 +33,84 @@ function Weather(weather,valid_date) {
     this.valid_date = valid_date;
 }
 
+function Park(name,address,fee,description,url) {
+    this.name = name;
+    this.address = address;
+    this.fee = fee;
+    this.descripton = description;
+    this.url = url;
+}
+
 app.get('/location', (req,res) => {
-    const dataArrayFromJson = require('./data/location.json');
-    const dataObjectFromJson = dataArrayFromJson[0];
+    // const dataArrayFromJson = require('./data/location.json');
+    // const dataObjectFromJson = dataArrayFromJson[0];
 
+    const apiKey = process.env.GEOCODE_API_KEY;
     const searchedCity = req.query.city;
-    const newLocation = new Location(searchedCity,dataObjectFromJson.display_name,dataObjectFromJson.lat,dataObjectFromJson.lon);
+    const url = `https://us1.locationiq.com/v1/search.php?key=${apiKey}&q=${searchedCity}&format=json`;
+    const sqlQuery = 'SELECT * FROM location WHERE search_query=$1';
+    const sqlArray = [searchedCity];
 
-    res.send(newLocation);
+    client.query(sqlQuery, sqlArray).then(result => {
+        if(result.rows.length !== 0){
+            res.send(result.rows[0]);
+        }
+
+
+        superagent.get(url).then(apiReturned => {
+            const newLocation = new Location(searchedCity,apiReturned.body.formatted_query,apiReturned.body.latitude,apiReturned.body.longitude);
+            res.status(200).send(newLocation);
+
+            const sqlQuery = 'INSERT INTO location (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4)';
+            const sqlArray = [newLocation.searchedCity, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
+            client.query(sqlQuery, sqlArray);
+        })
+        }).catch(error => {
+            res.status(500).send('There was an error in the location query');
+    })
 });
 
 app.get('/weather', (req,res) => {
-    const dataArrayFromJson = require('./data/weather.json');
+    // const dataArrayFromJson = require('./data/weather.json');
+    const lat = parseFloat(req.query.latitude);
+    const lon = parseFloat(req.query.longitude);
+    const searchedCity = req.query.city;
+    const apiKey = process.env.WEATHER_API_KEY;
+    const url = `http://api.weatherbit.io/v2.0/forecast/daily`;
+    const searchParameters = {
+        key:apiKey, city:searchedCity, days:8
+    };
+
     const weatherArray = [];
-    dataArrayFromJson.data.map( day => {
-        weatherArray.push(new Weather(day.weather.description,day.valid_date))
-    });
-    res.send(weatherArray);
+    superagent.get(url).query(searchParameters).then(returnData => {
+        returnData.body.data.map( day => {
+            weatherArray.push(new Weather(day.weather.description,day.valid_date));
+        })
+        res.status(200).send(weatherArray);
+    }).catch(error => {
+        res.status(500).send('There was an error in the weather query');
+    })
+    // dataArrayFromJson.data.map( day => {
+    //     weatherArray.push(new Weather(day.weather.description,day.valid_date))
+    // });
+});
+
+app.get('/parks', (req,res) => {
+    const apiKey = process.env.PARKS_API_KEY;
+    const url = 'https://developer.nps.gov/api/v1/parks'
+    const state = req.query.state;
+    const searchParameters = {
+        key:apiKey, stateCode:'ia', limit:5
+    }
+    const parksArray = [];
+    superagent.get(url).query(searchParameters).then(returnData => {
+        returnData.body.data.map( park => {
+            parksArray.push(new Park(park.fullname,park.addresses.line1,park.entranceFees.cost,park.description,park.directionsUrl));
+        })
+        res.status(200).send(parksArray);
+    }).catch(error => {
+        res.status(500).send('There was an error in the parks query');
+    })
 });
 
 app.use('*', (req,res) => {
