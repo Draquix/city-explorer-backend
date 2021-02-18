@@ -7,8 +7,12 @@ const app = express();
 const cors = require('cors');
 const superagent = require('superagent');
 const { response } = require('express');
+const pg = require('pg');
 
 const PORT = process.env.PORT;
+const DATABASE_URL = process.env.DATABASE_URL;
+const client = new pg.Client(DATABASE_URL);
+
 
 app.use(cors());
 app.listen(PORT, () => console.log(`Server is listening on Port: ${PORT}`));
@@ -44,12 +48,25 @@ app.get('/location', (req,res) => {
     const apiKey = process.env.GEOCODE_API_KEY;
     const searchedCity = req.query.city;
     const url = `https://us1.locationiq.com/v1/search.php?key=${apiKey}&q=${searchedCity}&format=json`;
+    const sqlQuery = 'SELECT * FROM location WHERE search_query=$1';
+    const sqlArray = [searchedCity];
 
-    superagent.get(url).then(apiReturned => {
-        const newLocation = new Location(searchedCity,apiReturned.body.formatted_query,apiReturned.body.latitude,apiReturned.body.longitude);
-        res.status(200).send(newLocation);
-    }).catch(error => {
-        res.status(500).send('There was an error in the location query');
+    client.query(sqlQuery, sqlArray).then(result => {
+        if(result.rows.length !== 0){
+            res.send(result.rows[0]);
+        }
+
+
+        superagent.get(url).then(apiReturned => {
+            const newLocation = new Location(searchedCity,apiReturned.body.formatted_query,apiReturned.body.latitude,apiReturned.body.longitude);
+            res.status(200).send(newLocation);
+
+            const sqlQuery = 'INSERT INTO location (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4)';
+            const sqlArray = [newLocation.searchedCity, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
+            client.query(sqlQuery, sqlArray);
+        })
+        }).catch(error => {
+            res.status(500).send('There was an error in the location query');
     })
 });
 
